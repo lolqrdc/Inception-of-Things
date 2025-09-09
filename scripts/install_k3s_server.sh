@@ -6,8 +6,18 @@ echo "Installation du serveur K3s sur Alpine Linux..."
 # Mise à jour du système Alpine
 apk update
 
-# Installation de K3s en mode serveur
-curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface eth1" sh -
+# Installation de K3s en mode serveur avec configuration réseau améliorée
+echo "Configuration réseau pour K3s..."
+# Récupérer l'IP de l'interface privée (eth1 avec vagrant)
+PRIVATE_IP=$(ip addr show eth1 | grep -oP 'inet \K[\d.]+' | head -1)
+if [ -z "$PRIVATE_IP" ]; then
+    # Fallback: utiliser l'IP par défaut
+    PRIVATE_IP=$(hostname -I | awk '{print $1}')
+fi
+echo "IP privée détectée: $PRIVATE_IP"
+
+# Installation de K3s avec la bonne interface réseau et configuration simplifiée
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--write-kubeconfig-mode=644 --node-ip=$PRIVATE_IP" sh -
 
 # Attendre que K3s démarre complètement et que le fichier kubeconfig soit créé
 echo "Attente du démarrage de K3s..."
@@ -54,6 +64,11 @@ fi
 # Le token est automatiquement généré et stocké dans le fichier par K3s
 echo "Token généré automatiquement par K3s et stocké dans $NODE_TOKEN"
 cat $NODE_TOKEN
+
+# Sauvegarder l'IP du serveur pour faciliter la communication
+echo "Sauvegarde de l'IP du serveur..."
+echo "$PRIVATE_IP" > /var/lib/rancher/k3s/server-ip
+echo "IP du serveur sauvegardée: $PRIVATE_IP"
 
 # Vérifier que K3s fonctionne
 echo "Vérification que K3s fonctionne..."
