@@ -1,1 +1,1 @@
-{"9p":{"/vagrant":{"disabled":false,"guestpath":"/vagrant","hostpath":"/home/edetoh/p1-vagrant/confs","type":"9p","accessmode":"mapped","mount":true,"__vagrantfile":true,"target":"/vagrant","readonly":null,"mount_tag":"3540c80a911e74400b19267b7b6368b"}}}
+{"9p":{"/vagrant":{"disabled":false,"guestpath":"/vagrant","hostpath":"/home/edetoh/p1-vagrant/confs","type":"9p","accessmode":"squash","mount":true,"__vagrantfile":true,"target":"/vagrant","readonly":null,"mount_tag":"3540c80a911e74400b19267b7b6368b"}}}
