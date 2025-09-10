@@ -14,9 +14,43 @@ NC = \033[0m # No Color
 # Target par défaut
 all: up
 
-# Lancer les machines virtuelles
+# Lancer les machines virtuelles de façon séquentielle (sans nettoyage préalable)
 up:
-	@echo "$(GREEN)🚀 Démarrage du cluster K3s automatique...$(NC)"
+	@echo "$(GREEN)🚀 Démarrage du cluster K3s en mode séquentiel...$(NC)"
+	@echo "$(BLUE)📁 Création du dossier confs si nécessaire...$(NC)"
+	@mkdir -p confs
+	@chmod 755 confs
+	@echo "$(BLUE)🔧 Vérification que les scripts sont exécutables...$(NC)"
+	@chmod +x scripts/*.sh
+	@echo "$(BLUE)⚡ 1. Lancement du master node (edetohS)...$(NC)"
+	$(VAGRANT_CMD) up edetohS
+	@echo "$(GREEN)✅ Master node démarré !$(NC)"
+	@echo "$(BLUE)📥 2. Récupération automatique des fichiers K3s...$(NC)"
+	@sleep 5  # Attendre que le master soit complètement prêt
+	./scripts/fetch_k3s_files.sh
+	@echo "$(GREEN)✅ Fichiers K3s récupérés !$(NC)"
+	@echo "$(BLUE)⚡ 3. Lancement du worker node (edetohSW)...$(NC)"
+	$(VAGRANT_CMD) up edetohSW
+	@echo "$(GREEN)✅ Worker node démarré !$(NC)"
+	@echo "$(GREEN)🎉 Cluster K3s déployé avec succès !$(NC)"
+	@echo "$(YELLOW)📋 Vérification de l'état du cluster...$(NC)"
+	@sleep 5
+	@$(MAKE) cluster-info
+	@echo "$(GREEN)🎉 Déploiement séquentiel terminé !$(NC)"
+
+# Lancer avec nettoyage préalable (peut demander sudo)
+up-clean:
+	@echo "$(GREEN)🚀 Démarrage du cluster K3s avec nettoyage préalable...$(NC)"
+	@echo "$(BLUE)🧹 Nettoyage préalable...$(NC)"
+	@$(MAKE) -s cleanup-orphans || true
+	@$(MAKE) up-no-clean
+
+# Lancer sans nettoyage préalable
+up-no-clean: up
+
+# Lancer en mode parallèle (ancien comportement)
+up-parallel:
+	@echo "$(GREEN)🚀 Démarrage du cluster K3s en mode parallèle...$(NC)"
 	@echo "$(BLUE)🧹 Vérification et nettoyage préalable...$(NC)"
 	@$(MAKE) -s cleanup-orphans || true
 	@echo "$(BLUE)📁 Création du dossier confs si nécessaire...$(NC)"
@@ -24,13 +58,13 @@ up:
 	@chmod 755 confs
 	@echo "$(BLUE)🔧 Vérification que le script d'automatisation est exécutable...$(NC)"
 	@chmod +x scripts/fetch_k3s_files.sh
-	@echo "$(BLUE)⚡ Lancement des VMs avec Vagrant (100% automatique)...$(NC)"
+	@echo "$(BLUE)⚡ Lancement des VMs avec Vagrant (mode parallèle)...$(NC)"
 	$(VAGRANT_CMD) up
-	@echo "$(GREEN)✅ Cluster K3s déployé automatiquement avec succès !$(NC)"
+	@echo "$(GREEN)✅ Cluster K3s déployé !$(NC)"
 	@echo "$(YELLOW)📋 Vérification de l'état du cluster...$(NC)"
 	@sleep 5
 	@$(MAKE) cluster-info
-	@echo "$(GREEN)🎉 Déploiement 100% automatique terminé !$(NC)"
+	@echo "$(GREEN)🎉 Déploiement parallèle terminé !$(NC)"
 
 # Nettoyer et redémarrer complètement
 re: clean up
@@ -53,19 +87,7 @@ clean:
 # Nettoyage des domaines orphelins (commande interne)
 cleanup-orphans:
 	@echo "$(YELLOW)🗑️  Suppression des domaines libvirt orphelins...$(NC)"
-	-sudo virsh destroy $(PROJECT_NAME)_edetohS 2>/dev/null || true
-	-sudo virsh destroy $(PROJECT_NAME)_edetohSW 2>/dev/null || true
-	-sudo virsh destroy $(PROJECT_NAME)_agloriosS 2>/dev/null || true
-	-sudo virsh destroy $(PROJECT_NAME)_agloriosSW 2>/dev/null || true
-	-sudo virsh undefine $(PROJECT_NAME)_edetohS --remove-all-storage 2>/dev/null || true
-	-sudo virsh undefine $(PROJECT_NAME)_edetohSW --remove-all-storage 2>/dev/null || true
-	-sudo virsh undefine $(PROJECT_NAME)_agloriosS --remove-all-storage 2>/dev/null || true
-	-sudo virsh undefine $(PROJECT_NAME)_agloriosSW --remove-all-storage 2>/dev/null || true
-	@echo "$(YELLOW)🧹 Nettoyage des volumes orphelins...$(NC)"
-	-sudo virsh vol-delete $(PROJECT_NAME)_edetohS.img default 2>/dev/null || true
-	-sudo virsh vol-delete $(PROJECT_NAME)_edetohSW.img default 2>/dev/null || true
-	-sudo virsh vol-delete $(PROJECT_NAME)_agloriosS.img default 2>/dev/null || true
-	-sudo virsh vol-delete $(PROJECT_NAME)_agloriosSW.img default 2>/dev/null || true
+	-@sudo ./scripts/cleanup_libvirt.sh 2>/dev/null || true
 
 # Destruction des VMs seulement
 destroy:

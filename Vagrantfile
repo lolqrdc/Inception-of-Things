@@ -64,17 +64,30 @@ Vagrant.configure("2") do |config|
 		node1.vm.provision "shell", inline: <<-SHELL
 		echo "Démarrage du worker node..."
 
-		# Attendre que le token soit disponible (avec timeout)
-		TIMEOUT=300  # 5 minutes maximum
+		# Installer netcat pour les tests de connectivité
+		apk add --no-cache netcat-openbsd
+
+		# Vérifier d'abord que le master est accessible
+		echo "Vérification de la connectivité avec le master..."
+		while ! nc -z 192.168.56.110 6443 2>/dev/null; do
+			echo "En attente que le master K3s soit accessible..."
+			sleep 3
+		done
+		echo "Master K3s accessible !"
+
+		# Attendre que le token soit disponible (timeout réduit)
+		TIMEOUT=60  # 1 minute devrait suffire
 		ELAPSED=0
 		while [ ! -f /vagrant/node-token ] && [ $ELAPSED -lt $TIMEOUT ]; do
 			echo "En attente du token du master node... ($ELAPSED/$TIMEOUT secondes)"
-			sleep 5
-			ELAPSED=$((ELAPSED + 5))
+			sleep 2
+			ELAPSED=$((ELAPSED + 2))
 		done
 
 		if [ ! -f /vagrant/node-token ]; then
 			echo "ERREUR: Token non disponible après $TIMEOUT secondes"
+			echo "Contenu du dossier /vagrant:"
+			ls -la /vagrant/
 			exit 1
 		fi
 
@@ -82,6 +95,8 @@ Vagrant.configure("2") do |config|
 		TOKEN=$(cat /vagrant/node-token | tr -d '\\r\\n' | tr -d '\\0')
 		if [ -z "$TOKEN" ]; then
 			echo "ERREUR: Token vide après nettoyage"
+			echo "Contenu brut du fichier token:"
+			cat /vagrant/node-token | hexdump -C
 			exit 1
 		fi
 
