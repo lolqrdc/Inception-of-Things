@@ -79,11 +79,11 @@ make help
 
 ```
 .
-├── Vagrantfile                 # Configuration Vagrant
+├── Vagrantfile                 # Configuration Vagrant avec K3s inline
 ├── Makefile                    # Automatisation
 ├── scripts/
-│   ├── install_k3s_server.sh  # Installation du serveur K3s
-│   └── install_k3s_worker.sh  # Installation du worker K3s
+│   ├── fetch_k3s_files.sh     # Récupération automatique des fichiers K3s
+│   └── cleanup_libvirt.sh     # Nettoyage des ressources libvirt
 ├── confs/                      # Dossier partagé (créé automatiquement)
 │   ├── node-token             # Token K3s (généré)
 │   └── k3s.yaml               # Configuration kubectl (générée)

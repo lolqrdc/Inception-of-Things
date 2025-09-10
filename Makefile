@@ -1,4 +1,4 @@
-.PHONY: all up clean destroy re status ssh-server ssh-worker logs help fix-box cluster-info get-kubeconfig restart-k3s test-automation cleanup-orphans deploy
+.PHONY: all up up-clean clean destroy re status ssh-server ssh-worker logs help fix-box cluster-info get-kubeconfig restart-k3s test-automation cleanup-orphans validate monitor
 
 # Variables
 VAGRANT_CMD = vagrant
@@ -43,34 +43,10 @@ up-clean:
 	@echo "$(GREEN)🚀 Démarrage du cluster K3s avec nettoyage préalable...$(NC)"
 	@echo "$(BLUE)🧹 Nettoyage préalable...$(NC)"
 	@$(MAKE) -s cleanup-orphans || true
-	@$(MAKE) up-no-clean
-
-# Lancer sans nettoyage préalable
-up-no-clean: up
-
-# Lancer en mode parallèle (ancien comportement)
-up-parallel:
-	@echo "$(GREEN)🚀 Démarrage du cluster K3s en mode parallèle...$(NC)"
-	@echo "$(BLUE)🧹 Vérification et nettoyage préalable...$(NC)"
-	@$(MAKE) -s cleanup-orphans || true
-	@echo "$(BLUE)📁 Création du dossier confs si nécessaire...$(NC)"
-	@mkdir -p confs
-	@chmod 755 confs
-	@echo "$(BLUE)🔧 Vérification que le script d'automatisation est exécutable...$(NC)"
-	@chmod +x scripts/fetch_k3s_files.sh
-	@echo "$(BLUE)⚡ Lancement des VMs avec Vagrant (mode parallèle)...$(NC)"
-	$(VAGRANT_CMD) up
-	@echo "$(GREEN)✅ Cluster K3s déployé !$(NC)"
-	@echo "$(YELLOW)📋 Vérification de l'état du cluster...$(NC)"
-	@sleep 5
-	@$(MAKE) cluster-info
-	@echo "$(GREEN)🎉 Déploiement parallèle terminé !$(NC)"
+	@$(MAKE) up
 
 # Nettoyer et redémarrer complètement
 re: clean up
-
-# Alternative à 're'
-remake: re
 
 # Nettoyer complètement (destruction des VMs et nettoyage des ressources)
 clean:
@@ -202,26 +178,12 @@ validate:
 		echo "$(RED)❌ Cluster incomplet ou nœuds non prêts$(NC)"; \
 	fi
 
-# Déploiement complet automatisé (alternative qui force la récupération des fichiers)
-deploy:
-	@echo "$(GREEN)🚀 Déploiement complet du cluster K3s...$(NC)"
-	@$(MAKE) up
-	@echo "$(BLUE)📥 Récupération automatique des fichiers...$(NC)"
-	@sleep 15
-	@./scripts/fetch_k3s_files.sh
-	@echo "$(BLUE)🔧 Déploiement du worker node...$(NC)"
-	@$(VAGRANT_CMD) up edetohSW
-	@echo "$(GREEN)🎉 Validation finale...$(NC)"
-	@$(MAKE) validate
-	@echo "$(GREEN)✅ Cluster K3s complètement déployé !$(NC)"
-
 # Afficher l'aide
 help:
 	@echo "$(BLUE)📖 Aide - Makefile pour le cluster K3s$(NC)"
 	@echo ""
 	@echo "$(GREEN)Commandes principales :$(NC)"
-	@echo "  $(YELLOW)make$(NC) ou $(YELLOW)make up$(NC)     - Créer et démarrer le master K3s"
-	@echo "  $(YELLOW)make deploy$(NC)         - Déploiement complet automatisé (master + worker)"
+	@echo "  $(YELLOW)make$(NC) ou $(YELLOW)make up$(NC)     - Créer et démarrer le cluster K3s complet"
 	@echo "  $(YELLOW)make re$(NC)             - Nettoyer et redémarrer complètement"
 	@echo "  $(YELLOW)make clean$(NC)          - Nettoyer complètement (VMs + ressources)"
 	@echo "  $(YELLOW)make destroy$(NC)        - Détruire seulement les VMs"
@@ -244,8 +206,8 @@ help:
 	@echo "  $(YELLOW)make fix-box$(NC)        - Réparer les problèmes de box Vagrant"
 	@echo "  $(YELLOW)make help$(NC)           - Afficher cette aide"
 	@echo ""
-	@echo "$(BLUE)🚀 Démarrage rapide: $(YELLOW)make deploy$(NC) pour un cluster complet en une commande$(NC)"
-	@echo "$(BLUE)💡 Astuce: Après 'make deploy', utilisez 'make get-kubeconfig' pour accéder au cluster depuis l'hôte$(NC)"
+	@echo "$(BLUE)🚀 Démarrage rapide: $(YELLOW)make up$(NC) pour un cluster complet en une commande$(NC)"
+	@echo "$(BLUE)💡 Astuce: Après le démarrage, utilisez 'make get-kubeconfig' pour accéder au cluster depuis l'hôte$(NC)"
 
 # Réparer les problèmes de box Vagrant corrompue
 fix-box:
