@@ -1,19 +1,47 @@
 Vagrant.configure("2") do |config|
+	# Configuration SSH sans mot de passe
+	config.ssh.insert_key = false
+	config.ssh.private_key_path = ["~/.vagrant.d/insecure_private_key", "~/.ssh/id_rsa"]
+	config.vm.provision "file", source: "~/.ssh/id_rsa.pub", destination: "~/.ssh/authorized_keys"
 
 	config.vm.define "edetohS" do |master|
-		master.vm.box = "generic/alpine312"
+		master.vm.box = "ubuntu/bionic64"
 		master.vm.network "private_network", ip: "192.168.56.110"
 		master.vm.hostname = "edetohS"
-		master.vm.synced_folder "./confs", "/vagrant", type: "9p", disabled: false, accessmode: "squash", mount: true
-		master.vm.provider "libvirt" do |lv|
-			lv.memory = "1024"
-			lv.cpus = "1"
-			lv.title = "edetohS"
+		master.vm.synced_folder "./confs", "/vagrant"
+		master.vm.provider "virtualbox" do |vb|
+			vb.memory = "1024"
+			vb.cpus = "1"
 		end
 
 		master.vm.provision "shell", inline: <<-SHELL
+		# Mise à jour du système et installation des outils nécessaires
+		echo "Mise à jour du système Ubuntu..."
+		sudo apt-get update
+		sudo apt-get install -y curl wget net-tools
+
+		# Configuration réseau pour Ubuntu - eth1 avec IP fixe
+		echo "Configuration du réseau Ubuntu..."
+		sudo tee /etc/netplan/01-netcfg.yaml > /dev/null <<EOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.56.110/24
+      nameservers:
+        addresses: [8.8.8.8, 8.8.4.4]
+EOF
+		sudo netplan apply
+		sleep 5
+
+		# Vérifier la connectivité
+		echo "Test de connectivité..."
+		ping -c 3 8.8.8.8 || echo "Connectivité Internet limitée"
+
 		# Installation K3s master
-		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface eth1" sh -
+		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface enp0s8" sh -
 		sleep 15
 		sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 
@@ -35,6 +63,10 @@ Vagrant.configure("2") do |config|
 		sudo cat ${KUBE_CONFIG} > /tmp/k3s.yaml
 		sudo chmod 644 /tmp/k3s.yaml
 
+		# Obtenir l'IP du master pour la configuration
+		MASTER_IP=$(hostname -I | awk '{print $1}')
+		echo "IP du master: $MASTER_IP"
+
 		echo "Master K3s installé avec succès"
 		echo "Token: $(cat /tmp/node-token-clean)"
 
@@ -51,21 +83,38 @@ Vagrant.configure("2") do |config|
 	end
 
 	config.vm.define "edetohSW", autostart: false do |node1|
-		node1.vm.box = "generic/alpine312"
+		node1.vm.box = "ubuntu/bionic64"
 		node1.vm.hostname = "edetohSW"
-		node1.vm.synced_folder "./confs", "/vagrant", type: "9p", disabled: false, accessmode: "squash", mount: true
+		node1.vm.synced_folder "./confs", "/vagrant"
 		node1.vm.network "private_network", ip: "192.168.56.111"
-		node1.vm.provider "libvirt" do |lv|
-			lv.memory = "1024"
-			lv.cpus = "1"
-			lv.title = "edetohSW"
+		node1.vm.provider "virtualbox" do |vb|
+			vb.memory = "1024"
+			vb.cpus = "1"
 		end
 
 		node1.vm.provision "shell", inline: <<-SHELL
-		echo "Démarrage du worker node..."
+		# Mise à jour du système et installation des outils nécessaires
+		echo "Mise à jour du système Ubuntu..."
+		sudo apt-get update
+		sudo apt-get install -y curl wget netcat
 
-		# Installer netcat pour les tests de connectivité
-		apk add --no-cache netcat-openbsd
+		# Configuration réseau pour Ubuntu - eth1 avec IP fixe
+		echo "Configuration du réseau Ubuntu..."
+		sudo tee /etc/netplan/01-netcfg.yaml > /dev/null <<EOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.56.111/24
+      nameservers:
+        addresses: [8.8.8.8, 8.8.4.4]
+EOF
+		sudo netplan apply
+		sleep 5
+
+		echo "Démarrage du worker node..."
 
 		# Vérifier d'abord que le master est accessible
 		echo "Vérification de la connectivité avec le master..."
@@ -103,7 +152,7 @@ Vagrant.configure("2") do |config|
 		echo "Token récupéré: $TOKEN"
 
 		# Installer K3s en mode agent avec variables d'environnement propres
-		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface eth1" K3S_URL="https://192.168.56.110:6443" K3S_TOKEN="$TOKEN" sh -
+		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface enp0s8" K3S_URL="https://192.168.56.110:6443" K3S_TOKEN="$TOKEN" sh -
 
 		echo "Worker K3s installé avec succès"
 		sleep 10
