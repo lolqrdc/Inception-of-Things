@@ -1,8 +1,17 @@
 Vagrant.configure("2") do |config|
-	# Configuration SSH sans mot de passe
-	config.ssh.insert_key = false
-	config.ssh.private_key_path = ["~/.vagrant.d/insecure_private_key", "~/.ssh/id_rsa"]
-	config.vm.provision "file", source: "~/.ssh/id_rsa.pub", destination: "~/.ssh/authorized_keys"
+	# Configuration SSH - utilisation des clés par défaut de Vagrant
+	config.ssh.insert_key = true
+	config.ssh.private_key_path = "~/.vagrant.d/insecure_private_key"
+
+	# Générer automatiquement les clés SSH si elles n'existent pas
+	config.vm.provision "shell", inline: <<-SHELL
+		if [ ! -f ~/.ssh/id_rsa ]; then
+			echo "Génération des clés SSH..."
+			ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
+		fi
+		cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+		chmod 600 ~/.ssh/authorized_keys
+	SHELL
 
 	config.vm.define "edetohS" do |master|
 		master.vm.box = "ubuntu/bionic64"

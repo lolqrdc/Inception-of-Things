@@ -1,6 +1,6 @@
 # P1 Vagrant - Cluster K3s
 
-Ce projet permet de créer automatiquement un cluster Kubernetes K3s avec Vagrant et libvirt.
+Ce projet permet de créer automatiquement un cluster Kubernetes K3s avec Vagrant et VirtualBox.
 
 ## Architecture
 
@@ -10,8 +10,21 @@ Ce projet permet de créer automatiquement un cluster Kubernetes K3s avec Vagran
 ## Prérequis
 
 - Vagrant
-- libvirt/KVM
-- Accès sudo (pour la gestion des domaines libvirt)
+- VirtualBox
+- Clés SSH (générées automatiquement si nécessaire)
+
+## Installation sur une nouvelle machine
+
+Sur une nouvelle machine, exécutez d'abord le script d'initialisation :
+
+```bash
+./init.sh
+```
+
+Ce script va :
+- Générer les clés SSH si elles n'existent pas
+- Installer VirtualBox si nécessaire
+- Installer Vagrant si nécessaire
 
 ## Utilisation
 
@@ -19,9 +32,9 @@ Ce projet permet de créer automatiquement un cluster Kubernetes K3s avec Vagran
 
 ```bash
 # Démarrer le cluster
-make
+vagrant up
 
-# Ou explicitement
+# Ou utiliser le Makefile
 make up
 ```
 
@@ -125,6 +138,91 @@ Les machines utilisent le réseau privé `192.168.56.0/24`. Assurez-vous qu'il n
 ### Modifier la version K3s
 
 Les scripts téléchargent automatiquement la dernière version stable. Pour une version spécifique, modifiez les scripts dans `scripts/`.
+
+## Dépannage
+
+### Erreur "private_key_path file must exist"
+
+**Cause** : Les clés SSH n'existent pas sur la nouvelle machine.
+
+**Solution** :
+```bash
+# Exécuter le script d'initialisation
+./init.sh
+
+# Ou générer manuellement les clés SSH
+ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
+```
+
+### Erreur "File upload source file must exist"
+
+**Cause** : Le fichier `~/.ssh/id_rsa.pub` n'existe pas.
+
+**Solution** : Exécutez `./init.sh` ou générez les clés SSH comme indiqué ci-dessus.
+
+### Erreur "VirtualBox is not installed"
+
+**Cause** : VirtualBox n'est pas installé sur la machine.
+
+**Solution** :
+```bash
+sudo apt update
+sudo apt install virtualbox virtualbox-ext-pack
+```
+
+### Erreur "Vagrant is not installed"
+
+**Cause** : Vagrant n'est pas installé.
+
+**Solution** :
+```bash
+sudo apt install vagrant
+```
+
+### Problème d'espace disque
+
+**Cause** : Pas assez d'espace pour créer les VMs.
+
+**Solution** :
+```bash
+# Vérifier l'espace disponible
+df -h
+
+# Libérer de l'espace si nécessaire
+sudo apt autoremove
+sudo apt autoclean
+```
+
+### Les VMs ne démarrent pas
+
+**Cause** : Conflit avec VirtualBox ou réseau.
+
+**Solution** :
+```bash
+# Nettoyer complètement
+vagrant destroy -f
+rm -rf .vagrant
+
+# Redémarrer VirtualBox
+sudo systemctl restart virtualbox
+
+# Relancer
+vagrant up
+```
+
+### Problème de réseau entre les VMs
+
+**Cause** : Conflit d'IP ou problème de réseau VirtualBox.
+
+**Solution** :
+```bash
+# Vérifier les IPs
+vagrant ssh edetohS -c "ip addr show"
+vagrant ssh edetohSW -c "ip addr show"
+
+# Tester la connectivité
+vagrant ssh edetohSW -c "ping -c 3 192.168.56.110"
+```
 
 ## Développement
 
