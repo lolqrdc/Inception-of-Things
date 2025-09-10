@@ -13,6 +13,12 @@ Vagrant.configure("2") do |config|
 		chmod 600 ~/.ssh/authorized_keys
 	SHELL
 
+	# Configuration pour gérer les problèmes de virtualisation
+	config.vm.provider "virtualbox" do |vb|
+		vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
+		vb.customize ["modifyvm", :id, "--paravirtprovider", "none"]
+	end
+
 	config.vm.define "edetohS" do |master|
 		master.vm.box = "ubuntu/bionic64"
 		master.vm.network "private_network", ip: "192.168.56.110"
