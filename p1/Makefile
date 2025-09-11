@@ -1,4 +1,4 @@
-.PHONY: all install up clean destroy status ssh-master ssh-worker cluster-info help
+.PHONY: install up clean destroy status ssh-master ssh-worker cluster-info help
 
 # Variables
 VAGRANT_CMD = vagrant
@@ -14,8 +14,7 @@ install:
 	@chmod +x install.sh
 	@./install.sh
 
-# Démarrage du cluster K3s complet
-all: up
+# Démarrage du cluster K3s
 up:
 	@echo "$(GREEN)� Démarrage du cluster K3s...$(NC)"
 	@mkdir -p confs
@@ -66,24 +65,127 @@ cluster-info:
 	@echo "$(YELLOW)=== Pods système ===$(NC)"
 	-$(VAGRANT_CMD) ssh edetohS -c "sudo k3s kubectl get pods -A" 2>/dev/null || echo "$(RED)❌ Impossible de récupérer les pods$(NC)"
 
+# Déployer P2 sur ce cluster
+deploy-p2:
+	@echo "$(GREEN)🚀 Déploiement des applications P2 sur ce cluster K3s$(NC)"
+	@if [ ! -f confs/k3s.yaml ]; then \
+		echo "$(RED)❌ Cluster K3s non démarré$(NC)"; \
+		echo "$(YELLOW)   Démarrez le cluster d'abord: make up$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)ℹ️  Vérification de la connectivité...$(NC)"
+	@if ! nc -z 192.168.56.110 6443 2>/dev/null; then \
+		echo "$(RED)❌ Cluster non accessible$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)📦 Déploiement de app1...$(NC)"
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app1-deployment.yaml
+	@export KUBECONFIG=confs/k3s.yaml && kubectl rollout status deployment/app1-deployment --timeout=120s
+	@echo "$(BLUE)📦 Déploiement de app2...$(NC)"
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app2-deployment.yaml
+	@export KUBECONFIG=confs/k3s.yaml && kubectl rollout status deployment/app2-deployment --timeout=120s
+	@echo "$(BLUE)📦 Déploiement de app3...$(NC)"
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app3-deployment.yaml
+	@export KUBECONFIG=confs/k3s.yaml && kubectl rollout status deployment/app3-deployment --timeout=120s
+	@echo "$(BLUE)🌐 Configuration de l'Ingress...$(NC)"
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/ingress.yaml
+	@echo "$(GREEN)✅ Applications P2 déployées avec succès!$(NC)"
+	@echo ""
+	@echo "$(BLUE)🌐 Applications accessibles via:$(NC)"
+	@echo "  • http://app1.com (ajoutez '192.168.56.110 app1.com' à /etc/hosts)"
+	@echo "  • http://app2.com (ajoutez '192.168.56.110 app2.com' à /etc/hosts)"
+	@echo "  • http://192.168.56.110 (app3 par défaut)"
+
+# Supprimer les applications P2
+clean-p2:
+	@echo "$(YELLOW)🧹 Suppression des applications P2$(NC)"
+	@if [ -f confs/k3s.yaml ]; then \
+		export KUBECONFIG=confs/k3s.yaml && \
+		kubectl delete -f ../p2/confs/ingress.yaml --ignore-not-found=true && \
+		kubectl delete -f ../p2/confs/app1-deployment.yaml --ignore-not-found=true && \
+		kubectl delete -f ../p2/confs/app2-deployment.yaml --ignore-not-found=true && \
+		kubectl delete -f ../p2/confs/app3-deployment.yaml --ignore-not-found=true; \
+		echo "$(GREEN)✅ Applications P2 supprimées$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️  Cluster non accessible$(NC)"; \
+	fi
+
+# Statut des applications P2
+status-p2:
+	@echo "$(BLUE)📊 Statut des applications P2$(NC)"
+	@if [ -f confs/k3s.yaml ]; then \
+		export KUBECONFIG=confs/k3s.yaml && \
+		echo "$(YELLOW)=== Pods P2 ===$(NC)" && \
+		kubectl get pods -l 'app in (app1,app2,app3)' -o wide 2>/dev/null || echo "$(RED)❌ Aucun pod P2$(NC)"; \
+		echo "" && \
+		echo "$(YELLOW)=== Services P2 ===$(NC)" && \
+		kubectl get services -l 'app in (app1,app2,app3)' 2>/dev/null || echo "$(RED)❌ Aucun service P2$(NC)"; \
+		echo "" && \
+		echo "$(YELLOW)=== Ingress P2 ===$(NC)" && \
+		kubectl get ingress 2>/dev/null || echo "$(RED)❌ Aucun ingress$(NC)"; \
+	else \
+		echo "$(RED)❌ Cluster non accessible$(NC)"; \
+	fi
+
+# Test des applications P2
+test-p2:
+	@echo "$(BLUE)🧪 Test des applications P2$(NC)"
+	@echo "$(YELLOW)Ajout des entrées /etc/hosts si nécessaire...$(NC)"
+	@if ! grep -q "192.168.56.110 app1.com" /etc/hosts; then \
+		echo "echo '192.168.56.110 app1.com' | sudo tee -a /etc/hosts"; \
+	fi
+	@if ! grep -q "192.168.56.110 app2.com" /etc/hosts; then \
+		echo "echo '192.168.56.110 app2.com' | sudo tee -a /etc/hosts"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)Test app1:$(NC)"
+	@curl -s -w "HTTP %{http_code}\n" http://app1.com -o /dev/null || echo "❌ app1 non accessible"
+	@echo "$(BLUE)Test app2:$(NC)"
+	@curl -s -w "HTTP %{http_code}\n" http://app2.com -o /dev/null || echo "❌ app2 non accessible"
+	@echo "$(BLUE)Test app3:$(NC)"
+	@curl -s -w "HTTP %{http_code}\n" http://192.168.56.110 -o /dev/null || echo "❌ app3 non accessible"
+
+# Déploiement complet P1 + P2
+full-deploy: up deploy-p2
+
 # Aide
 help:
-	@echo "$(BLUE)� Aide - Makefile pour Inception of Things$(NC)"
+	@echo "$(BLUE)📖 Aide - Makefile pour Inception of Things (P1 + P2)$(NC)"
 	@echo ""
-	@echo "$(GREEN)Commandes principales :$(NC)"
-	@echo "  $(YELLOW)make install$(NC)      - Installer toutes les dépendances"
-	@echo "  $(YELLOW)make up$(NC)           - Créer et démarrer le cluster K3s"
-	@echo "  $(YELLOW)make clean$(NC)        - Nettoyer complètement"
+	@echo "$(GREEN)🏗️  Commandes P1 (Cluster K3s) :$(NC)"
+	@echo "  $(YELLOW)make install$(NC)      - Installer les dépendances"
+	@echo "  $(YELLOW)make up$(NC)           - Démarrer le cluster K3s"
+	@echo "  $(YELLOW)make clean$(NC)        - Nettoyer P1 + P2 complètement"
 	@echo "  $(YELLOW)make destroy$(NC)      - Détruire les VMs uniquement"
 	@echo ""
-	@echo "$(GREEN)Commandes d'information :$(NC)"
-	@echo "  $(YELLOW)make status$(NC)       - Statut des machines"
-	@echo "  $(YELLOW)make cluster-info$(NC) - Informations sur le cluster"
+	@echo "$(GREEN)📦 Commandes P2 (Applications) :$(NC)"
+	@echo "  $(YELLOW)make deploy-p2$(NC)    - Déployer les applications P2"
+	@echo "  $(YELLOW)make clean-p2$(NC)     - Supprimer les applications P2"
+	@echo "  $(YELLOW)make status-p2$(NC)    - Statut des applications P2"
+	@echo "  $(YELLOW)make test-p2$(NC)      - Tester les applications P2"
 	@echo ""
-	@echo "$(GREEN)Commandes de connexion :$(NC)"
+	@echo "$(GREEN)🚀 Commandes combinées :$(NC)"
+	@echo "  $(YELLOW)make full-deploy$(NC)  - P1 + P2 en une commande"
+	@echo ""
+	@echo "$(GREEN)ℹ️  Commandes d'information :$(NC)"
+	@echo "  $(YELLOW)make status$(NC)       - Statut des VMs P1"
+	@echo "  $(YELLOW)make cluster-info$(NC) - Informations cluster K3s"
 	@echo "  $(YELLOW)make ssh-master$(NC)   - SSH vers le master"
 	@echo "  $(YELLOW)make ssh-worker$(NC)   - SSH vers le worker"
 	@echo ""
-	@echo "$(BLUE)🚀 Démarrage rapide:$(NC)"
-	@echo "  1. $(YELLOW)make install$(NC)  # Une seule fois"
-	@echo "  2. $(YELLOW)make up$(NC)       # Démarrer le cluster"
+	@echo "$(BLUE)🎯 Workflows recommandés :$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🚀 Démarrage rapide complet :$(NC)"
+	@echo "  1. $(YELLOW)make install$(NC)     # Une seule fois"
+	@echo "  2. $(YELLOW)make full-deploy$(NC) # P1 + P2 en une fois"
+	@echo "  3. $(YELLOW)make test-p2$(NC)     # Tester les apps"
+	@echo ""
+	@echo "$(YELLOW)🔧 Démarrage étape par étape :$(NC)"
+	@echo "  1. $(YELLOW)make up$(NC)          # Cluster K3s"
+	@echo "  2. $(YELLOW)make deploy-p2$(NC)   # Applications"
+	@echo "  3. $(YELLOW)make status-p2$(NC)   # Vérifier"
+	@echo ""
+	@echo "$(GREEN)🌐 Applications P2 déployées :$(NC)"
+	@echo "  • http://app1.com"
+	@echo "  • http://app2.com" 
+	@echo "  • http://192.168.56.110 (app3)"
