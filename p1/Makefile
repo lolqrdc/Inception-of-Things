@@ -79,16 +79,16 @@ deploy-p2:
 		exit 1; \
 	fi
 	@echo "$(BLUE)📦 Déploiement de app1...$(NC)"
-	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app1-deployment.yaml
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app1-deployment.yaml --validate=false
 	@export KUBECONFIG=confs/k3s.yaml && kubectl rollout status deployment/app1-deployment --timeout=120s
 	@echo "$(BLUE)📦 Déploiement de app2...$(NC)"
-	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app2-deployment.yaml
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app2-deployment.yaml --validate=false
 	@export KUBECONFIG=confs/k3s.yaml && kubectl rollout status deployment/app2-deployment --timeout=120s
 	@echo "$(BLUE)📦 Déploiement de app3...$(NC)"
-	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app3-deployment.yaml
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/app3-deployment.yaml --validate=false
 	@export KUBECONFIG=confs/k3s.yaml && kubectl rollout status deployment/app3-deployment --timeout=120s
 	@echo "$(BLUE)🌐 Configuration de l'Ingress...$(NC)"
-	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/ingress.yaml
+	@export KUBECONFIG=confs/k3s.yaml && kubectl apply -f ../p2/confs/ingress.yaml --validate=false
 	@echo "$(GREEN)✅ Applications P2 déployées avec succès!$(NC)"
 	@echo ""
 	@echo "$(BLUE)🌐 Applications accessibles via:$(NC)"
