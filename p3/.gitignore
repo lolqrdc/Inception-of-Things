@@ -1,0 +1,5 @@
+# Fichiers temporaires
+*.bak
+*.log
+get-docker.sh
+kubectl
