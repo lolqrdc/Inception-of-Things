@@ -1,4 +1,4 @@
-.PHONY: install up clean destroy status ssh-master ssh-worker cluster-info help
+.PHONY: install up clean destroy status ssh-master ssh-worker cluster-info help deploy-p2 clean-p2 status-p2 test-p2 full-deploy install-p3 setup-p3 deploy-p3 status-p3 port-forward-p3 test-p3 clean-p3 full-deploy-p3 full-deploy-all
 
 # Variables
 VAGRANT_CMD = vagrant
@@ -73,6 +73,8 @@ deploy-p2:
 		echo "$(YELLOW)   Démarrez le cluster d'abord: make up$(NC)"; \
 		exit 1; \
 	fi
+	@echo "$(BLUE)ℹ️  Correction de l'adresse du serveur dans kubeconfig...$(NC)"
+	@sed -i 's|server: https://127.0.0.1:6443|server: https://192.168.56.110:6443|g' confs/k3s.yaml
 	@echo "$(BLUE)ℹ️  Vérification de la connectivité...$(NC)"
 	@if ! nc -z 192.168.56.110 6443 2>/dev/null; then \
 		echo "$(RED)❌ Cluster non accessible$(NC)"; \
@@ -145,8 +147,67 @@ test-p2:
 	@echo "$(BLUE)Test app3:$(NC)"
 	@curl -s -w "HTTP %{http_code}\n" http://192.168.56.110 -o /dev/null || echo "❌ app3 non accessible"
 
+# Installer l'environnement P3 (K3d)
+install-p3:
+	@echo "$(GREEN)🚀 Installation de l'environnement P3 (K3d + ArgoCD)$(NC)"
+	@cd ../p3 && chmod +x run.sh && ./run.sh install
+	@echo "$(GREEN)✅ Environnement P3 installé !$(NC)"
+	@echo "$(YELLOW)⚠️  Reconnectez-vous à votre session pour utiliser Docker$(NC)"
+
+# Configurer ArgoCD
+setup-p3:
+	@echo "$(GREEN)🔧 Configuration d'ArgoCD...$(NC)"
+	@cd ../p3 && ./run.sh setup
+	@echo "$(GREEN)✅ ArgoCD configuré !$(NC)"
+
+# Déployer l'application wil-playground
+deploy-p3:
+	@echo "$(GREEN)📦 Déploiement de l'application wil-playground...$(NC)"
+	@cd ../p3 && ./run.sh deploy
+	@echo "$(GREEN)✅ Application P3 déployée !$(NC)"
+
+# Statut de P3
+status-p3:
+	@echo "$(BLUE)📊 Statut de la partie 3 (ArgoCD)$(NC)"
+	@cd ../p3 && ./run.sh status
+
+# Lancer le port-forward pour ArgoCD
+port-forward-p3:
+	@echo "$(BLUE)🌐 Lancement du port-forward ArgoCD...$(NC)"
+	@echo "$(YELLOW)ArgoCD sera accessible sur: http://localhost:8080$(NC)"
+	@echo "$(YELLOW)Mot de passe admin: $(NC)"
+	@kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d && echo
+	@echo ""
+	@kubectl port-forward -n argocd pod/$$(kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o jsonpath='{.items[0].metadata.name}') 8080:8080
+
+# Test de l'application P3
+test-p3:
+	@echo "$(BLUE)🧪 Test de l'application P3$(NC)"
+	@cd ../p3 && chmod +x test-app.sh && ./test-app.sh test
+
+# Nettoyage P3
+clean-p3:
+	@echo "$(YELLOW)🧹 Nettoyage de P3 (suppression du cluster K3d)$(NC)"
+	@cd ../p3 && ./run.sh clean
+	@echo "$(GREEN)✅ P3 nettoyé !$(NC)"
+
+# Déploiement complet P3 (install + setup + deploy)
+full-deploy-p3: install-p3 setup-p3 deploy-p3
+	@echo "$(GREEN)🎉 P3 déployé complètement !$(NC)"
+	@echo ""
+	@echo "$(BLUE)🌐 ArgoCD accessible via:$(NC) https://localhost:8080"
+	@echo "$(BLUE)🧪 Testez l'application avec:$(NC) make test-p3"
+
 # Déploiement complet P1 + P2
 full-deploy: up deploy-p2
+
+# Déploiement complet de toutes les parties
+full-deploy-all: full-deploy full-deploy-p3
+	@echo "$(GREEN)🎉 Toutes les parties déployées !$(NC)"
+	@echo ""
+	@echo "$(BLUE)🌐 Applications disponibles :$(NC)"
+	@echo "  • P1/P2: http://app1.com, http://app2.com, http://192.168.56.110"
+	@echo "  • P3: ArgoCD https://localhost:8080"
 
 # Aide
 help:
@@ -164,8 +225,19 @@ help:
 	@echo "  $(YELLOW)make status-p2$(NC)    - Statut des applications P2"
 	@echo "  $(YELLOW)make test-p2$(NC)      - Tester les applications P2"
 	@echo ""
+	@echo "$(GREEN)🚀 Commandes P3 (ArgoCD) :$(NC)"
+	@echo "  $(YELLOW)make install-p3$(NC)   - Installer l'environnement P3 (K3d)"
+	@echo "  $(YELLOW)make setup-p3$(NC)     - Configurer ArgoCD"
+	@echo "  $(YELLOW)make deploy-p3$(NC)    - Déployer l'application wil-playground"
+	@echo "  $(YELLOW)make status-p3$(NC)    - Statut de P3"
+	@echo "  $(YELLOW)make port-forward-p3$(NC) - Lancer le port-forward ArgoCD"
+	@echo "  $(YELLOW)make test-p3$(NC)      - Tester l'application P3"
+	@echo "  $(YELLOW)make clean-p3$(NC)     - Nettoyer P3 (supprimer le cluster K3d)"
+	@echo ""
 	@echo "$(GREEN)🚀 Commandes combinées :$(NC)"
 	@echo "  $(YELLOW)make full-deploy$(NC)  - P1 + P2 en une commande"
+	@echo "  $(YELLOW)make full-deploy-p3$(NC) - P3 complet en une commande"
+	@echo "  $(YELLOW)make full-deploy-all$(NC) - P1 + P2 + P3 en une commande"
 	@echo ""
 	@echo "$(GREEN)ℹ️  Commandes d'information :$(NC)"
 	@echo "  $(YELLOW)make status$(NC)       - Statut des VMs P1"
@@ -185,7 +257,21 @@ help:
 	@echo "  2. $(YELLOW)make deploy-p2$(NC)   # Applications"
 	@echo "  3. $(YELLOW)make status-p2$(NC)   # Vérifier"
 	@echo ""
+	@echo "$(YELLOW)🚀 Démarrage P3 (ArgoCD) :$(NC)"
+	@echo "  1. $(YELLOW)make install-p3$(NC)  # Installer K3d (reconnexion requise)"
+	@echo "  2. $(YELLOW)make setup-p3$(NC)    # Configurer ArgoCD"
+	@echo "  3. $(YELLOW)make deploy-p3$(NC)   # Déployer l'application"
+	@echo "  4. $(YELLOW)make test-p3$(NC)     # Tester"
+	@echo ""
+	@echo "$(YELLOW)🌟 Démarrage complet (toutes les parties) :$(NC)"
+	@echo "  1. $(YELLOW)make install$(NC)     # Une seule fois"
+	@echo "  2. $(YELLOW)make full-deploy-all$(NC) # P1 + P2 + P3"
+	@echo ""
 	@echo "$(GREEN)🌐 Applications P2 déployées :$(NC)"
 	@echo "  • http://app1.com"
-	@echo "  • http://app2.com" 
+	@echo "  • http://app2.com"
 	@echo "  • http://192.168.56.110 (app3)"
+	@echo ""
+	@echo "$(GREEN)🌐 Applications P3 déployées :$(NC)"
+	@echo "  • ArgoCD: https://localhost:8080"
+	@echo "  • Test application: make test-p3"
