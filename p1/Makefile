@@ -1,4 +1,4 @@
-.PHONY: install up clean destroy status ssh-master ssh-worker cluster-info help deploy-p2 clean-p2 status-p2 test-p2 full-deploy install-p3 setup-p3 deploy-p3 status-p3 port-forward-p3 test-p3 clean-p3 full-deploy-p3 full-deploy-all
+.PHONY: install up clean destroy status ssh-master ssh-worker cluster-info help deploy-p2 clean-p2 status-p2 test-p2 install-p3 setup-p3 deploy-p3 status-p3 port-forward-p3 test-p3 clean-p3 start-all stop-all
 
 # Variables
 VAGRANT_CMD = vagrant
@@ -30,11 +30,33 @@ up:
 # Nettoyage complet
 clean:
 	@echo "$(RED)🧹 Nettoyage complet...$(NC)"
+	@$(MAKE) clean-p2 || true
+	@$(MAKE) clean-p3 || true
 	-$(VAGRANT_CMD) destroy -f
 	@echo "$(YELLOW)📁 Suppression des fichiers temporaires...$(NC)"
 	-rm -f confs/node-token confs/k3s.yaml
 	-rm -rf .vagrant
-	@echo "$(GREEN)✅ Nettoyage terminé !$(NC)"
+	@echo "$(GREEN)✅ Nettoyage terminé (P1, P2, P3)!$(NC)"
+
+# Arrêt complet (toutes les parties)
+stop-all:
+	@echo "$(RED)🛑 Arrêt de toutes les parties...$(NC)"
+	@$(MAKE) clean
+	@echo "$(GREEN)✅ Tout arrêté et nettoyé !$(NC)"
+
+# Démarrage complet (toutes les parties)
+start-all:
+	@echo "$(GREEN)🚀 Démarrage complet de toutes les parties...$(NC)"
+	@$(MAKE) up
+	@$(MAKE) deploy-p2
+	@$(MAKE) deploy-p3-full
+	@echo "$(GREEN)🎉 Toutes les parties sont démarrées !$(NC)"
+	@echo "$(BLUE)🌐 P1/P2: http://app1.com, http://app2.com, http://192.168.56.110$(NC)"
+	@echo "$(BLUE)🌐 P3: ArgoCD http://localhost:8080$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🧪 Lancement du test P3 (port-forward wil-playground)...$(NC)"
+	@$(MAKE) test-p3
+
 
 # Destruction des VMs uniquement
 destroy:
@@ -191,32 +213,19 @@ clean-p3:
 	@cd ../p3 && ./run.sh clean
 	@echo "$(GREEN)✅ P3 nettoyé !$(NC)"
 
-# Déploiement complet P3 (install + setup + deploy)
-full-deploy-p3: install-p3 setup-p3 deploy-p3
+# Déploiement P3 complet (install + setup + deploy)
+deploy-p3-full: install-p3 setup-p3 deploy-p3
 	@echo "$(GREEN)🎉 P3 déployé complètement !$(NC)"
-	@echo ""
-	@echo "$(BLUE)🌐 ArgoCD accessible via:$(NC) https://localhost:8080"
-	@echo "$(BLUE)🧪 Testez l'application avec:$(NC) make test-p3"
-
-# Déploiement complet P1 + P2
-full-deploy: up deploy-p2
-
-# Déploiement complet de toutes les parties
-full-deploy-all: full-deploy full-deploy-p3
-	@echo "$(GREEN)🎉 Toutes les parties déployées !$(NC)"
-	@echo ""
-	@echo "$(BLUE)🌐 Applications disponibles :$(NC)"
-	@echo "  • P1/P2: http://app1.com, http://app2.com, http://192.168.56.110"
-	@echo "  • P3: ArgoCD https://localhost:8080"
+	@echo "$(BLUE)🌐 ArgoCD: http://localhost:8080 | App: make test-p3$(NC)"
 
 # Aide
 help:
-	@echo "$(BLUE)📖 Aide - Makefile pour Inception of Things (P1 + P2)$(NC)"
+	@echo "$(BLUE)📖 Inception of Things - Guide d'utilisation$(NC)"
 	@echo ""
 	@echo "$(GREEN)🏗️  Commandes P1 (Cluster K3s) :$(NC)"
 	@echo "  $(YELLOW)make install$(NC)      - Installer les dépendances"
 	@echo "  $(YELLOW)make up$(NC)           - Démarrer le cluster K3s"
-	@echo "  $(YELLOW)make clean$(NC)        - Nettoyer P1 + P2 complètement"
+	@echo "  $(YELLOW)make clean$(NC)        - Nettoyer tout (P1+P2+P3)"
 	@echo "  $(YELLOW)make destroy$(NC)      - Détruire les VMs uniquement"
 	@echo ""
 	@echo "$(GREEN)📦 Commandes P2 (Applications) :$(NC)"
@@ -234,10 +243,10 @@ help:
 	@echo "  $(YELLOW)make test-p3$(NC)      - Tester l'application P3"
 	@echo "  $(YELLOW)make clean-p3$(NC)     - Nettoyer P3 (supprimer le cluster K3d)"
 	@echo ""
-	@echo "$(GREEN)🚀 Commandes combinées :$(NC)"
-	@echo "  $(YELLOW)make full-deploy$(NC)  - P1 + P2 en une commande"
-	@echo "  $(YELLOW)make full-deploy-p3$(NC) - P3 complet en une commande"
-	@echo "  $(YELLOW)make full-deploy-all$(NC) - P1 + P2 + P3 en une commande"
+	@echo "$(GREEN)🚀 Commandes principales :$(NC)"
+	@echo "  $(YELLOW)make start-all$(NC)   - Démarrer toutes les parties (P1+P2+P3) + test P3"
+	@echo "  $(YELLOW)make stop-all$(NC)    - Arrêter et nettoyer tout"
+	@echo "  $(YELLOW)make deploy-p3-full$(NC) - P3 complet uniquement"
 	@echo ""
 	@echo "$(GREEN)ℹ️  Commandes d'information :$(NC)"
 	@echo "  $(YELLOW)make status$(NC)       - Statut des VMs P1"
@@ -247,31 +256,17 @@ help:
 	@echo ""
 	@echo "$(BLUE)🎯 Workflows recommandés :$(NC)"
 	@echo ""
-	@echo "$(YELLOW)🚀 Démarrage rapide complet :$(NC)"
-	@echo "  1. $(YELLOW)make install$(NC)     # Une seule fois"
-	@echo "  2. $(YELLOW)make full-deploy$(NC) # P1 + P2 en une fois"
-	@echo "  3. $(YELLOW)make test-p2$(NC)     # Tester les apps"
+	@echo "$(YELLOW)🌟 Démarrage rapide :$(NC)"
+	@echo "  1. $(YELLOW)make install$(NC)     # Installation initiale"
+	@echo "  2. $(YELLOW)make start-all$(NC)   # Tout démarrer + test P3"
+	@echo "  3. $(YELLOW)make test-p2$(NC)     # Tester P2"
+	@echo "     $(BLUE)→ P3 déjà testé automatiquement$(NC)"
 	@echo ""
-	@echo "$(YELLOW)🔧 Démarrage étape par étape :$(NC)"
-	@echo "  1. $(YELLOW)make up$(NC)          # Cluster K3s"
-	@echo "  2. $(YELLOW)make deploy-p2$(NC)   # Applications"
-	@echo "  3. $(YELLOW)make status-p2$(NC)   # Vérifier"
+	@echo "$(YELLOW)� Nettoyage :$(NC)"
+	@echo "  • $(YELLOW)make stop-all$(NC)     # Tout arrêter et nettoyer"
+	@echo "  • $(YELLOW)make clean-p2$(NC)     # Nettoyer P2 uniquement"
+	@echo "  • $(YELLOW)make clean-p3$(NC)     # Nettoyer P3 uniquement"
 	@echo ""
-	@echo "$(YELLOW)🚀 Démarrage P3 (ArgoCD) :$(NC)"
-	@echo "  1. $(YELLOW)make install-p3$(NC)  # Installer K3d (reconnexion requise)"
-	@echo "  2. $(YELLOW)make setup-p3$(NC)    # Configurer ArgoCD"
-	@echo "  3. $(YELLOW)make deploy-p3$(NC)   # Déployer l'application"
-	@echo "  4. $(YELLOW)make test-p3$(NC)     # Tester"
-	@echo ""
-	@echo "$(YELLOW)🌟 Démarrage complet (toutes les parties) :$(NC)"
-	@echo "  1. $(YELLOW)make install$(NC)     # Une seule fois"
-	@echo "  2. $(YELLOW)make full-deploy-all$(NC) # P1 + P2 + P3"
-	@echo ""
-	@echo "$(GREEN)🌐 Applications P2 déployées :$(NC)"
-	@echo "  • http://app1.com"
-	@echo "  • http://app2.com"
-	@echo "  • http://192.168.56.110 (app3)"
-	@echo ""
-	@echo "$(GREEN)🌐 Applications P3 déployées :$(NC)"
-	@echo "  • ArgoCD: https://localhost:8080"
-	@echo "  • Test application: make test-p3"
+	@echo "$(GREEN)🌐 Applications déployées :$(NC)"
+	@echo "  • P2: http://app1.com, http://app2.com, http://192.168.56.110"
+	@echo "  • P3: ArgoCD http://localhost:8080, wil-playground http://localhost:8889"

@@ -48,7 +48,7 @@ test_app() {
 
     sleep 5
     echo -e "${BLUE}Test sur http://localhost:8889${NC}"
-    
+
     if curl -s http://localhost:8889/ 2>/dev/null; then
         echo ""
         echo -e "${GREEN}✅ Application accessible !${NC}"
@@ -56,7 +56,7 @@ test_app() {
         echo ""
         echo -e "${RED}❌ Non accessible${NC}"
     fi
-    
+
     echo ""
     echo -e "${YELLOW}Port-forward actif (PID: $PORT_FORWARD_PID)${NC}"
     echo -e "${BLUE}Accédez à: http://localhost:8889${NC}"
