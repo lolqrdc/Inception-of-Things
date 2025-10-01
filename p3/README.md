@@ -8,16 +8,16 @@ Déploiement d'ArgoCD avec K3d et l'application wil42/playground.
 cd /home/e/Inception-of-Things/p3
 
 # Installation complète
-./run.sh install    # K3d + Docker + kubectl
+./scripts/run.sh install    # K3d + Docker + kubectl
 # Reconnexion nécessaire pour Docker
-./run.sh setup      # ArgoCD
-./run.sh deploy     # Application wil-playground
+./scripts/run.sh setup      # ArgoCD
+./scripts/run.sh deploy     # Application wil-playground
 ```
 
 ## 🌐 Accès
 
-- **ArgoCD**: https://localhost:8080 (admin/password affiché dans `./run.sh status`)
-- **Application**: `./test-app.sh test` puis http://localhost:8888
+- **ArgoCD**: https://localhost:8080 (admin/password affiché dans `./scripts/run.sh status`)
+- **Application**: `./scripts/test-app.sh test` puis http://localhost:8888
 
 ## 🔄 Changement de version
 
@@ -41,9 +41,9 @@ git push            # ArgoCD synchronise automatiquement
 ## 🔧 Commandes utiles
 
 ```bash
-./run.sh status         # Statut complet
-./test-app.sh status    # Statut application
+./scripts/run.sh status         # Statut complet
+./scripts/test-app.sh status    # Statut application
 kubectl get ns          # Voir namespaces: argocd, dev
 kubectl get pods -n dev # Voir pods wil-playground
-./run.sh clean          # Nettoyage
+./scripts/run.sh clean          # Nettoyage
 ```

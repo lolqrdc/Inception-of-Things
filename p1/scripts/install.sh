@@ -7,6 +7,11 @@
 
 set -e  # Arrêter en cas d'erreur
 
+# Déterminer le répertoire racine du projet (p1)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${PROJECT_ROOT}"
+
 # Couleurs pour l'affichage
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -33,8 +38,13 @@ log_error() {
 
 # Vérification que le script est exécuté depuis le bon répertoire
 check_directory() {
-    if [ ! -f "Vagrantfile" ] || [ ! -f "Makefile" ]; then
-        log_error "Ce script doit être exécuté depuis le répertoire racine du projet (contenant Vagrantfile et Makefile)"
+    if [ ! -f "Vagrantfile" ]; then
+        log_error "Fichier Vagrantfile introuvable dans ${PROJECT_ROOT}"
+        exit 1
+    fi
+
+    if [ ! -f "Makefile" ] && [ ! -f "scripts/Makefile" ]; then
+        log_error "Makefile introuvable. Assurez-vous que scripts/Makefile est présent dans le projet"
         exit 1
     fi
 }
@@ -193,7 +203,7 @@ show_usage() {
     echo "  make cluster-info"
     echo ""
     echo -e "${YELLOW}Se connecter aux machines :${NC}"
-    echo "  make ssh-server    # Master node"
+    echo "  make ssh-master    # Master node"
     echo "  make ssh-worker    # Worker node"
     echo ""
     echo -e "${YELLOW}Nettoyer complètement :${NC}"

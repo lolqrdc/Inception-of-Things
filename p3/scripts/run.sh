@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${ROOT_DIR}"
+
 # Couleurs pour l'affichage
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -27,8 +31,8 @@ show_help() {
 # Installation
 install_environment() {
     echo -e "${BLUE}Installation de l'environnement K3d...${NC}"
-    chmod +x scripts/install.sh
-    ./scripts/install.sh
+    chmod +x "${SCRIPT_DIR}/install.sh"
+    "${SCRIPT_DIR}/install.sh"
     echo -e "${GREEN}✅ Environnement installé avec succès!${NC}"
     echo -e "${YELLOW}⚠️  Reconnectez-vous à votre session pour utiliser Docker${NC}"
 }
@@ -42,16 +46,16 @@ setup_argocd() {
         exit 1
     fi
 
-    chmod +x scripts/setup.sh
-    ./scripts/setup.sh
+    chmod +x "${SCRIPT_DIR}/setup.sh"
+    "${SCRIPT_DIR}/setup.sh"
     echo -e "${GREEN}✅ ArgoCD configuré avec succès!${NC}"
 }
 
 # Déploiement
 deploy_app() {
     echo -e "${BLUE}Déploiement de l'application wil-playground...${NC}"
-    chmod +x scripts/deploy-apps.sh
-    ./scripts/deploy-apps.sh
+    chmod +x "${SCRIPT_DIR}/deploy-apps.sh"
+    "${SCRIPT_DIR}/deploy-apps.sh"
     echo -e "${GREEN}✅ Application déployée avec succès!${NC}"
 }
 
@@ -94,7 +98,7 @@ show_status() {
 
     echo ""
     echo -e "${GREEN}🌐 ArgoCD:${NC} https://localhost:8080 (admin)"
-    echo -e "${GREEN}🧪 Test app:${NC} ./test-app.sh test"
+    echo -e "${GREEN}🧪 Test app:${NC} ./scripts/test-app.sh test"
 }
 
 # Script principal

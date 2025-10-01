@@ -14,7 +14,7 @@ echo "⏳ Vérification qu'ArgoCD est prêt..."
 kubectl wait --for=condition=available --timeout=120s deployment/argocd-server -n argocd
 
 echo "📦 Déploiement de l'application wil-playground..."
-kubectl apply -f argocd-configs/wil-application.yaml
+kubectl apply -f confs/wil-application.yaml
 
 echo "⏳ Attente de la synchronisation de l'application..."
 sleep 15

@@ -2,8 +2,8 @@
 set -e
 
 echo "=== Installation Docker ==="
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+curl -fsSL https://get.docker.com -o scripts/get-docker.sh
+sudo sh scripts/get-docker.sh
 sudo usermod -aG docker $USER
 
 echo "=== Installation K3d ==="

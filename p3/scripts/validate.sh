@@ -8,6 +8,9 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Se placer à la racine du projet
+cd "$(dirname "$0")/../.."
+
 echo -e "${GREEN}🔍 Validation du projet Inception of Things${NC}"
 echo "=============================================="
 
@@ -25,15 +28,15 @@ done
 # Vérifier les fichiers essentiels
 echo -e "${YELLOW}📄 Vérification des fichiers essentiels...${NC}"
 FILES=(
-    "p1/Makefile"
+    "p1/scripts/Makefile"
     "p1/Vagrantfile"
-    "p1/install.sh"
+    "p1/scripts/install.sh"
     "p2/confs/app1-deployment.yaml"
     "p2/confs/app2-deployment.yaml"
     "p2/confs/app3-deployment.yaml"
     "p2/confs/ingress.yaml"
-    "p3/run.sh"
-    "p3/test-app.sh"
+    "p3/scripts/run.sh"
+    "p3/scripts/test-app.sh"
     "p3/scripts/install.sh"
     "p3/scripts/setup.sh"
     "p3/scripts/deploy-apps.sh"
@@ -51,9 +54,9 @@ done
 # Vérifier les permissions d'exécution
 echo -e "${YELLOW}🔐 Vérification des permissions...${NC}"
 EXECUTABLES=(
-    "p1/install.sh"
-    "p3/run.sh"
-    "p3/test-app.sh"
+    "p1/scripts/install.sh"
+    "p3/scripts/run.sh"
+    "p3/scripts/test-app.sh"
     "p3/scripts/install.sh"
     "p3/scripts/setup.sh"
     "p3/scripts/deploy-apps.sh"
@@ -69,7 +72,7 @@ done
 
 # Vérifier le Makefile
 echo -e "${YELLOW}📋 Vérification du Makefile...${NC}"
-cd p1
+cd p1/scripts
 if make help >/dev/null 2>&1; then
     echo -e "  ✅ Makefile syntaxiquement correct"
 else
@@ -83,11 +86,12 @@ grep "^[a-zA-Z][a-zA-Z0-9_-]*:" Makefile | grep -v "^#" | cut -d: -f1 | sort | w
     echo -e "  • $target"
 done
 
+cd ../..
 echo ""
 echo -e "${GREEN}✅ Validation terminée avec succès !${NC}"
 echo ""
 echo -e "${YELLOW}🚀 Pour démarrer le projet :${NC}"
-echo -e "  cd p1"
+echo -e "  cd p1/scripts"
 echo -e "  make install    # Installation initiale"
 echo -e "  make start-all  # Démarrer toutes les parties"
 echo ""
