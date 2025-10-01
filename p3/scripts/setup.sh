@@ -2,14 +2,29 @@
 set -e
 
 echo "=== Installation Argo CD ==="
-kubectl create namespace argocd
+kubectl get namespace argocd >/dev/null 2>&1 || kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 echo "=== Création namespace dev ==="
-kubectl create namespace dev
+kubectl get namespace dev >/dev/null 2>&1 || kubectl create namespace dev
 
 echo "=== Attente du démarrage d'Argo CD ==="
 kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
+kubectl wait --for=condition=available --timeout=300s deployment/argocd-repo-server -n argocd
+
+if kubectl get deployment argocd-application-controller -n argocd >/dev/null 2>&1; then
+	kubectl wait --for=condition=available --timeout=300s deployment/argocd-application-controller -n argocd
+else
+	echo "=== Attente du StatefulSet argocd-application-controller ==="
+	if ! kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=600s; then
+		echo "⚠️  Timeout en attendant argocd-application-controller. État actuel :"
+		kubectl get statefulset/argocd-application-controller -n argocd || true
+		kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-application-controller || true
+		echo "" && echo "Conseil : vérifiez les ressources disponibles et relancez le setup."
+		exit 1
+	fi
+fi
+kubectl wait --for=condition=available --timeout=300s deployment/argocd-dex-server -n argocd
 
 echo "=== Configuration port-forward ==="
 kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'

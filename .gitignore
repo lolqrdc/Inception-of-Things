@@ -3,3 +3,4 @@
 *.log
 get-docker.sh
 kubectl
+.env

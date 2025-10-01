@@ -1,12 +1,24 @@
 .PHONY: \
 	install up clean destroy status ssh-master ssh-worker cluster-info help \
 	deploy-p2 clean-p2 status-p2 test-p2 install-p3 setup-p3 deploy-p3 \
-	deploy-p3-full status-p3 port-forward-p3 test-p3 clean-p3 start-all stop-all
+	deploy-p3-full status-p3 port-forward-p3 test-p3 clean-p3 start-all stop-all \
+	clean-vbox dockerhub-secret
 
 # Variables
 VAGRANT_CMD = vagrant
+VB_CMD = VBoxManage
 HOST_IP = 192.168.56.110
 KUBECONFIG_P2 = ../confs/k3s.yaml
+VM_MASTER_NAME = k3s-master
+VM_WORKER_NAME = k3s-worker
+ENV_FILE = ../../.env
+
+ifneq (,$(wildcard $(ENV_FILE)))
+include $(ENV_FILE)
+export DOCKERHUB_USERNAME
+export DOCKERHUB_TOKEN
+export DOCKERHUB_EMAIL
+endif
 RED = \033[0;31m
 GREEN = \033[0;32m
 YELLOW = \033[1;33m
@@ -23,6 +35,7 @@ up:
 	@echo "$(GREEN)🚀 Démarrage du cluster K3s...$(NC)"
 	@mkdir -p ../confs
 	@chmod +x *.sh 2>/dev/null || true
+	@$(MAKE) clean-vbox
 	@echo "$(BLUE)📦 Démarrage du master node...$(NC)"
 	@cd .. && $(VAGRANT_CMD) up edetohS
 	@echo "$(GREEN)✅ Master démarré !$(NC)"
@@ -37,6 +50,7 @@ clean:
 	@$(MAKE) clean-p2 || true
 	@$(MAKE) clean-p3 || true
 	@cd .. && $(VAGRANT_CMD) destroy -f || true
+	@$(MAKE) clean-vbox
 	@echo "$(YELLOW)📁 Suppression des fichiers temporaires...$(NC)"
 	@rm -f ../confs/node-token ../confs/k3s.yaml
 	@rm -rf ../.vagrant
@@ -59,7 +73,7 @@ start-all:
 	@echo "$(BLUE)🌐 P3: ArgoCD http://localhost:8080$(NC)"
 	@echo ""
 	@echo "$(BLUE)⏳ Sleep 50$(NC)"
-	@echo sleep 50
+	@sleep 50
 	@echo "$(YELLOW)🧪 Lancement du PF P3 (port-forward wil-playground)...$(NC)"
 	@$(MAKE) test-p3
 
@@ -67,6 +81,7 @@ start-all:
 destroy:
 	@echo "$(RED)🛑 Destruction des VMs...$(NC)"
 	@cd .. && $(VAGRANT_CMD) destroy -f
+	@$(MAKE) clean-vbox
 
 # Statut des machines
 status:
@@ -100,6 +115,7 @@ deploy-p2:
 		echo "$(YELLOW)   Démarrez le cluster d'abord: make up$(NC)"; \
 		exit 1; \
 	fi
+	@$(MAKE) dockerhub-secret
 	@echo "$(BLUE)ℹ️  Correction de l'adresse du serveur dans kubeconfig...$(NC)"
 	@sed -i 's|server: https://127.0.0.1:6443|server: https://$(HOST_IP):6443|g' $(KUBECONFIG_P2)
 	@echo "$(BLUE)ℹ️  Vérification de la connectivité...$(NC)"
@@ -219,6 +235,45 @@ clean-p3:
 	@echo "$(YELLOW)🧹 Nettoyage de P3 (suppression du cluster K3d)$(NC)"
 	@cd ../../p3 && ./scripts/run.sh clean
 	@echo "$(GREEN)✅ P3 nettoyé !$(NC)"
+
+# Nettoyage d'éventuelles VM VirtualBox résiduelles
+clean-vbox:
+	@if command -v $(VB_CMD) >/dev/null 2>&1; then \
+		for vm in $(VM_MASTER_NAME) $(VM_WORKER_NAME); do \
+			if $(VB_CMD) list vms | grep -q "\"$${vm}\""; then \
+				echo "$(YELLOW)⚠️  Suppression de la VM résiduelle $${vm}...$(NC)"; \
+				$(VB_CMD) controlvm "$${vm}" poweroff 2>/dev/null || true; \
+				$(VB_CMD) unregistervm "$${vm}" --delete >/dev/null 2>&1 || true; \
+			fi; \
+		done; \
+	else \
+		echo "$(YELLOW)⚠️  VBoxManage non disponible, saut du nettoyage VirtualBox$(NC)"; \
+	fi
+
+dockerhub-secret:
+	@if [ -z "$(DOCKERHUB_USERNAME)" ] || [ -z "$(DOCKERHUB_TOKEN)" ]; then \
+		echo "$(YELLOW)⚠️  Variables DOCKERHUB_USERNAME/DOCKERHUB_TOKEN absentes. Ajoutez-les dans $(ENV_FILE).$(NC)"; \
+		exit 1; \
+	fi
+	@for ns in default dev; do \
+		if KUBECONFIG=$(KUBECONFIG_P2) kubectl get namespace $$ns >/dev/null 2>&1; then \
+			if ! KUBECONFIG=$(KUBECONFIG_P2) kubectl get secret dockerhub-cred -n $$ns >/dev/null 2>&1; then \
+				echo "$(BLUE)🔐 Création du secret dockerhub-cred dans le namespace $$ns...$(NC)"; \
+				KUBECONFIG=$(KUBECONFIG_P2) kubectl create secret docker-registry dockerhub-cred -n $$ns \
+					--docker-server=https://index.docker.io/v1/ \
+					--docker-username="$(DOCKERHUB_USERNAME)" \
+					--docker-password="$(DOCKERHUB_TOKEN)" \
+					--docker-email="$(DOCKERHUB_EMAIL)" >/dev/null; \
+			else \
+				echo "$(GREEN)✅ Secret dockerhub-cred déjà présent dans $$ns$(NC)"; \
+			fi; \
+			echo "$(BLUE)🔧 Mise à jour du serviceaccount default dans $$ns...$(NC)"; \
+			KUBECONFIG=$(KUBECONFIG_P2) kubectl patch serviceaccount default -n $$ns --type merge \
+				-p '{"imagePullSecrets":[{"name":"dockerhub-cred"}]}' >/dev/null 2>&1 || true; \
+		else \
+			echo "$(YELLOW)⚠️  Namespace $$ns indisponible, secret non créé$(NC)"; \
+		fi; \
+	done
 
 # Déploiement P3 complet (install + setup + deploy)
 deploy-p3-full: install-p3 setup-p3 deploy-p3
