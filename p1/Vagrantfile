@@ -37,7 +37,7 @@ network:
   version: 2
   renderer: networkd
   ethernets:
-    enp0s8:
+    eth1:
       addresses: [192.168.56.110/24]
       nameservers:
         addresses: [8.8.8.8, 8.8.4.4]
@@ -47,7 +47,7 @@ EOF
 
 		# Installation K3s master
 		echo "📦 Installation de K3s..."
-		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface enp0s8" sh - >/dev/null 2>&1
+		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface eth1" sh - >/dev/null 2>&1
 		sleep 10
 
 		# Attendre que K3s soit prêt
@@ -90,7 +90,7 @@ network:
   version: 2
   renderer: networkd
   ethernets:
-    enp0s8:
+    eth1:
       addresses: [192.168.56.111/24]
       nameservers:
         addresses: [8.8.8.8, 8.8.4.4]
@@ -112,7 +112,7 @@ EOF
 		# Installation K3s worker
 		echo "📦 Installation de K3s agent..."
 		TOKEN=$(cat /vagrant/node-token | tr -d '\r\n')
-		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface enp0s8" K3S_URL="https://192.168.56.110:6443" K3S_TOKEN="$TOKEN" sh - >/dev/null 2>&1
+		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface eth1" K3S_URL="https://192.168.56.110:6443" K3S_TOKEN="$TOKEN" sh - >/dev/null 2>&1
 
 		echo "✅ Worker K3s configuré avec succès"
 		SHELL
