@@ -15,7 +15,7 @@ spec:
         app: app2
     spec:
       nodeSelector:
-        kubernetes.io/hostname: edetohsw
+        kubernetes.io/hostname: edetohs
       containers:
         - name: app2
           image: nginxdemos/hello

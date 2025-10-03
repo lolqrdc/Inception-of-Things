@@ -4,3 +4,9 @@
 get-docker.sh
 kubectl
 .env
+*/vagrant/*
+*/.vagrant/*
+p1/k3s.yaml
+p2/confs/k3s.yaml
+p3/k3s.yaml
+p1/node-token

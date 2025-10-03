@@ -1,0 +1,102 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Part 2: K3s and three simple applications
+# Specifications:
+# - 1 machine avec K3s en mode server
+# - Latest stable OS distribution
+# - 3 applications web accessibles selon le HOST
+# - IP: 192.168.56.110
+# - Hostname: login + S (edetohS)
+# - Ingress routing:
+#   - HOST app1.com → app1
+#   - HOST app2.com → app2 (3 replicas)
+#   - Default → app3
+
+Vagrant.configure("2") do |config|
+	config.vm.box = "bento/debian-13"  # Latest stable Debian
+	config.ssh.insert_key = true
+	config.vm.boot_timeout = 600
+	config.ssh.connect_timeout = 120
+
+	# Server P2 - edetohS
+	config.vm.define "edetohS" do |server|
+		server.vm.hostname = "edetohS"
+		server.vm.network "private_network", ip: "192.168.56.110"
+		server.vm.synced_folder "./confs", "/vagrant"
+
+		server.vm.provider "virtualbox" do |vb|
+			vb.memory = 2048  # Plus de RAM pour les 3 applications
+			vb.cpus = 2
+			vb.name = "edetohS-p2"
+		end
+
+		server.vm.provision "shell", inline: <<-SHELL
+			echo "🚀 Configuration du serveur K3s P2..."
+
+			# Installation K3s en mode server
+			curl -sfL https://get.k3s.io | sh -s - server --flannel-iface=eth1
+
+			# Attendre que K3s soit prêt
+			while [ ! -f /var/lib/rancher/k3s/server/node-token ]; do sleep 2; done
+
+			# Copier la configuration pour l'accès externe
+			sudo cp /etc/rancher/k3s/k3s.yaml /vagrant/k3s.yaml
+			sudo chown vagrant:vagrant /vagrant/k3s.yaml
+
+			echo "⏳ Attente que K3s soit complètement prêt..."
+			sleep 30
+
+			echo "📦 Déploiement des applications..."
+
+			# Déploiement de app1
+			if [ -f /vagrant/app1-deployment.yaml ]; then
+				sudo k3s kubectl apply -f /vagrant/app1-deployment.yaml
+				echo "✅ App1 déployée"
+			fi
+
+			# Déploiement de app2 (3 replicas)
+			if [ -f /vagrant/app2-deployment.yaml ]; then
+				sudo k3s kubectl apply -f /vagrant/app2-deployment.yaml
+				echo "✅ App2 déployée (3 replicas)"
+			fi
+
+			# Déploiement de app3 (default)
+			if [ -f /vagrant/app3-deployment.yaml ]; then
+				sudo k3s kubectl apply -f /vagrant/app3-deployment.yaml
+				echo "✅ App3 déployée (default)"
+			fi
+
+			# Configuration de l'Ingress
+			if [ -f /vagrant/ingress.yaml ]; then
+				sudo k3s kubectl apply -f /vagrant/ingress.yaml
+				echo "✅ Ingress configuré"
+			fi
+
+			echo "⏳ Attente du déploiement des pods..."
+			sleep 20
+
+			echo "🔍 Statut du cluster:"
+			sudo k3s kubectl get nodes
+			echo ""
+			echo "🔍 Statut des pods:"
+			sudo k3s kubectl get pods -o wide
+			echo ""
+			echo "🔍 Statut des services:"
+			sudo k3s kubectl get services
+			echo ""
+			echo "🔍 Statut de l'ingress:"
+			sudo k3s kubectl get ingress
+			echo ""
+
+			echo "✅ Configuration P2 terminée!"
+			echo "🌐 Accès aux applications:"
+			echo "  • app1.com → http://192.168.56.110 (avec HOST: app1.com)"
+			echo "  • app2.com → http://192.168.56.110 (avec HOST: app2.com)"
+			echo "  • default  → http://192.168.56.110 (accès direct)"
+			echo ""
+			echo "💡 Pour tester, ajoutez à votre /etc/hosts:"
+			echo "192.168.56.110 app1.com app2.com"
+		SHELL
+	end
+end

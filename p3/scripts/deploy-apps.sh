@@ -64,7 +64,7 @@ ensure_dockerhub_secret() {
 ensure_dockerhub_secret
 
 echo "📦 Déploiement de l'application wil-playground..."
-kubectl apply -f confs/wil-application.yaml
+kubectl apply -f ../confs/wil-application.yaml
 
 echo "⏳ Attente de la création de l'application..."
 for attempt in {1..20}; do
