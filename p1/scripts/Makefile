@@ -2,15 +2,15 @@
 	install up clean destroy status ssh-master ssh-worker cluster-info help \
 	deploy-p2 clean-p2 status-p2 test-p2 install-p3 setup-p3 deploy-p3 \
 	deploy-p3-full status-p3 port-forward-p3 test-p3 clean-p3 start-all stop-all \
-	clean-vbox dockerhub-secret
+	clean-vbox dockerhub-secret start-p1 stop-p1 test-p1
 
 # Variables
 VAGRANT_CMD = vagrant
 VB_CMD = VBoxManage
 HOST_IP = 192.168.56.110
 KUBECONFIG_P2 = ../confs/k3s.yaml
-VM_MASTER_NAME = k3s-master
-VM_WORKER_NAME = k3s-worker
+VM_MASTER_NAME = edetohS
+VM_WORKER_NAME = edetohSW
 ENV_FILE = ../../.env
 
 ifneq (,$(wildcard $(ENV_FILE)))
@@ -76,6 +76,51 @@ start-all:
 	@sleep 50
 	@echo "$(YELLOW)🧪 Lancement du PF P3 (port-forward wil-playground)...$(NC)"
 	@$(MAKE) test-p3
+
+# ===============================
+# Commandes spécifiques P1
+# ===============================
+
+# Démarrage P1 uniquement
+start-p1:
+	@echo "$(GREEN)🚀 Démarrage de la partie 1 (Cluster K3s)...$(NC)"
+	@$(MAKE) up
+	@echo "$(GREEN)✅ Partie 1 démarrée avec succès !$(NC)"
+	@$(MAKE) test-p1
+
+# Arrêt P1 uniquement
+stop-p1:
+	@echo "$(RED)🛑 Arrêt de la partie 1...$(NC)"
+	@cd .. && $(VAGRANT_CMD) destroy -f || true
+	@$(MAKE) clean-vbox
+	@rm -f ../confs/node-token ../confs/k3s.yaml
+	@rm -rf ../.vagrant
+	@echo "$(GREEN)✅ Partie 1 arrêtée et nettoyée !$(NC)"
+
+# Test P1 uniquement
+test-p1:
+	@echo "$(BLUE)🧪 Test de la partie 1 (Cluster K3s)$(NC)"
+	@echo "$(YELLOW)=== Test de connectivité des nœuds ===$(NC)"
+	@if cd .. && $(VAGRANT_CMD) ssh edetohS -c "sudo k3s kubectl get nodes" 2>/dev/null | grep -q "Ready"; then \
+		echo "$(GREEN)✅ Cluster K3s opérationnel$(NC)"; \
+	else \
+		echo "$(RED)❌ Cluster K3s non fonctionnel$(NC)"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "$(YELLOW)=== Test des nœuds ===$(NC)"
+	@cd .. && $(VAGRANT_CMD) ssh edetohS -c "sudo k3s kubectl get nodes -o wide" 2>/dev/null || echo "$(RED)❌ Impossible de récupérer les nœuds$(NC)"
+	@echo ""
+	@echo "$(YELLOW)=== Test des pods système ===$(NC)"
+	@cd .. && $(VAGRANT_CMD) ssh edetohS -c "sudo k3s kubectl get pods -n kube-system" 2>/dev/null || echo "$(RED)❌ Impossible de récupérer les pods$(NC)"
+	@echo ""
+	@echo "$(YELLOW)=== Vérification des IPs ===$(NC)"
+	@echo "$(BLUE)Server (edetohS):$(NC)"
+	@cd .. && $(VAGRANT_CMD) ssh edetohS -c "ip addr show eth1 | grep 'inet '" 2>/dev/null || echo "$(RED)❌ IP Server introuvable$(NC)"
+	@echo "$(BLUE)Worker (edetohSW):$(NC)"
+	@cd .. && $(VAGRANT_CMD) ssh edetohSW -c "ip addr show eth1 | grep 'inet '" 2>/dev/null || echo "$(RED)❌ IP Worker introuvable$(NC)"
+	@echo ""
+	@echo "$(GREEN)🎉 Tests P1 terminés !$(NC)"
 
 # Destruction des VMs uniquement
 destroy:
@@ -286,6 +331,9 @@ help:
 	@echo ""
 	@echo "$(GREEN)🏗️  Commandes P1 (Cluster K3s) :$(NC)"
 	@echo "  $(YELLOW)make install$(NC)      - Installer les dépendances"
+	@echo "  $(YELLOW)make start-p1$(NC)     - Démarrer P1 uniquement"
+	@echo "  $(YELLOW)make stop-p1$(NC)      - Arrêter P1 uniquement"
+	@echo "  $(YELLOW)make test-p1$(NC)      - Tester P1 uniquement"
 	@echo "  $(YELLOW)make up$(NC)           - Démarrer le cluster K3s"
 	@echo "  $(YELLOW)make clean$(NC)        - Nettoyer tout (P1+P2+P3)"
 	@echo "  $(YELLOW)make destroy$(NC)      - Détruire les VMs uniquement"
@@ -318,7 +366,12 @@ help:
 	@echo ""
 	@echo "$(BLUE)🎯 Workflows recommandés :$(NC)"
 	@echo ""
-	@echo "$(YELLOW)🌟 Démarrage rapide :$(NC)"
+	@echo "$(YELLOW)🌟 P1 uniquement :$(NC)"
+	@echo "  1. $(YELLOW)make install$(NC)     # Installation initiale"
+	@echo "  2. $(YELLOW)make start-p1$(NC)    # Démarrer et tester P1"
+	@echo "  3. $(YELLOW)make stop-p1$(NC)     # Arrêter P1"
+	@echo ""
+	@echo "$(YELLOW)🌟 Démarrage rapide complet :$(NC)"
 	@echo "  1. $(YELLOW)make install$(NC)     # Installation initiale"
 	@echo "  2. $(YELLOW)make start-all$(NC)   # Tout démarrer + test P3"
 	@echo "  3. $(YELLOW)make test-p2$(NC)     # Tester P2"
@@ -326,9 +379,11 @@ help:
 	@echo ""
 	@echo "$(YELLOW)🛑 Nettoyage :$(NC)"
 	@echo "  • $(YELLOW)make stop-all$(NC)     # Tout arrêter et nettoyer"
+	@echo "  • $(YELLOW)make stop-p1$(NC)      # Arrêter P1 uniquement"
 	@echo "  • $(YELLOW)make clean-p2$(NC)     # Nettoyer P2 uniquement"
 	@echo "  • $(YELLOW)make clean-p3$(NC)     # Nettoyer P3 uniquement"
 	@echo ""
 	@echo "$(GREEN)🌐 Applications déployées :$(NC)"
+	@echo "  • P1: Cluster K3s avec 2 nœuds"
 	@echo "  • P2: http://app1.com, http://app2.com, http://$(HOST_IP)"
 	@echo "  • P3: ArgoCD http://localhost:8080, wil-playground http://localhost:8889"

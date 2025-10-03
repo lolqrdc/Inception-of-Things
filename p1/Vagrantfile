@@ -1,120 +1,80 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Part 1: K3s and Vagrant
+# Specifications:
+# - 2 machines avec ressources minimales (1 CPU, 512-1024 MB RAM)
+# - Latest stable OS distribution
+# - SSH sans mot de passe
+# - IPs dédiées sur eth1: 192.168.56.110 (Server), 192.168.56.111 (ServerWorker)
+# - K3s controller sur Server, K3s agent sur ServerWorker
+
 Vagrant.configure("2") do |config|
-	# Configuration SSH simplifiée
-	config.ssh.insert_key = false
-	config.vm.boot_timeout = 600
+	config.vm.box = "bento/debian-13"  # Latest stable Debian
+	config.ssh.insert_key = true
+	config.vm.boot_timeout = 600  # 10 minutes
+	config.ssh.connect_timeout = 120  # 2 minutes
 
-	# Configuration globale VirtualBox pour virtualisation imbriquée
-	config.vm.provider "virtualbox" do |vb|
-		vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
-		vb.customize ["modifyvm", :id, "--paravirtprovider", "none"]
-		vb.customize ["modifyvm", :id, "--hwvirtex", "on"]
-		vb.customize ["modifyvm", :id, "--nestedpaging", "on"]
-	end
+	# Server (Master) - edetohS
+	config.vm.define "edetohS" do |server|
+		server.vm.hostname = "edetohS"
+		server.vm.network "private_network", ip: "192.168.56.110"
 
-	# Master Node - edetohS
-	config.vm.define "edetohS" do |master|
-		master.vm.box = "phz/noble64"
-		master.vm.network "private_network", ip: "192.168.56.110"
-		master.vm.hostname = "edetohS"
-		master.vm.synced_folder "./confs", "/vagrant"
-
-		master.vm.provider "virtualbox" do |vb|
-			vb.memory = "2048"  # Augmenté pour plus de stabilité
-			vb.cpus = "2"
-			vb.name = "k3s-master"
+		server.vm.provider "virtualbox" do |vb|
+			vb.memory = 1024  # Ressources minimales
+			vb.cpus = 1
+			vb.name = "edetohS"
 		end
 
-		master.vm.provision "shell", inline: <<-SHELL
-		echo "🚀 Configuration du master K3s..."
+		server.vm.provision "shell", inline: <<-SHELL
+			# Installation K3s en mode controller
+			curl -sfL https://get.k3s.io | sh -s - server --flannel-iface=eth1
 
-		# Mise à jour système
-		apt-get update >/dev/null 2>&1
-		apt-get install -y curl wget net-tools >/dev/null 2>&1
+			# Attendre que K3s soit prêt
+			while [ ! -f /var/lib/rancher/k3s/server/node-token ]; do sleep 2; done
 
-		# Configuration réseau
-		tee /etc/netplan/01-netcfg.yaml > /dev/null <<EOF
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    eth1:
-      addresses: [192.168.56.110/24]
-      nameservers:
-        addresses: [8.8.8.8, 8.8.4.4]
-EOF
-		netplan apply >/dev/null 2>&1
-		sleep 3
+			# Copier le token pour le worker
+			sudo cp /var/lib/rancher/k3s/server/node-token /vagrant/node-token 2>/dev/null || true
+			sudo cp /etc/rancher/k3s/k3s.yaml /vagrant/k3s.yaml 2>/dev/null || true
+			sudo chmod 644 /vagrant/node-token /vagrant/k3s.yaml 2>/dev/null || true
 
-		# Installation K3s master
-		echo "📦 Installation de K3s..."
-		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface eth1" sh - >/dev/null 2>&1
-		sleep 10
-
-		# Attendre que K3s soit prêt
-		while [ ! -f /var/lib/rancher/k3s/server/node-token ]; do
-			sleep 2
-		done
-
-		# Copier les fichiers de configuration
-		cp /var/lib/rancher/k3s/server/node-token /vagrant/
-		cp /etc/rancher/k3s/k3s.yaml /vagrant/
-		chmod 644 /vagrant/node-token /vagrant/k3s.yaml
-
-		echo "✅ Master K3s configuré avec succès"
+			echo "✅ K3s server configuré"
 		SHELL
 	end
 
-	# Worker Node - edetohSW
+	# ServerWorker (Agent) - edetohSW
 	config.vm.define "edetohSW", autostart: false do |worker|
-		worker.vm.box = "phz/noble64"
 		worker.vm.hostname = "edetohSW"
 		worker.vm.network "private_network", ip: "192.168.56.111"
-		worker.vm.synced_folder "./confs", "/vagrant"
 
 		worker.vm.provider "virtualbox" do |vb|
-			vb.memory = "1536"
-			vb.cpus = "1"
-			vb.name = "k3s-worker"
+			vb.memory = 512   # Ressources minimales
+			vb.cpus = 1
+			vb.name = "edetohSW"
 		end
 
 		worker.vm.provision "shell", inline: <<-SHELL
-		echo "🔗 Configuration du worker K3s..."
+			# Installation netcat pour les tests de connectivité
+			apt-get update -qq && apt-get install -y netcat-openbsd
 
-		# Mise à jour système
-		apt-get update >/dev/null 2>&1
-		apt-get install -y curl wget netcat >/dev/null 2>&1
+			# Attendre que le server soit prêt
+			while ! nc -z 192.168.56.110 6443 2>/dev/null; do
+				echo "Attente du server K3s..."
+				sleep 3
+			done
 
-		# Configuration réseau
-		tee /etc/netplan/01-netcfg.yaml > /dev/null <<EOF
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    eth1:
-      addresses: [192.168.56.111/24]
-      nameservers:
-        addresses: [8.8.8.8, 8.8.4.4]
-EOF
-		netplan apply >/dev/null 2>&1
-		sleep 3
+			# Attendre le token
+			while [ ! -f /vagrant/node-token ]; do
+				echo "Attente du token..."
+				sleep 3
+			done
 
-		# Attendre la connectivité avec le master
-		echo "⏳ Attente de la connectivité avec le master..."
-		while ! nc -z 192.168.56.110 6443 2>/dev/null; do
-			sleep 3
-		done
+			# Installation K3s en mode agent
+			TOKEN=$(cat /vagrant/node-token)
+			curl -sfL https://get.k3s.io | K3S_TOKEN="$TOKEN" sh -s - agent \
+				--server=https://192.168.56.110:6443 --flannel-iface=eth1
 
-		# Attendre le token
-		while [ ! -f /vagrant/node-token ]; do
-			sleep 2
-		done
-
-		# Installation K3s worker
-		echo "📦 Installation de K3s agent..."
-		TOKEN=$(cat /vagrant/node-token | tr -d '\r\n')
-		curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC="--flannel-iface eth1" K3S_URL="https://192.168.56.110:6443" K3S_TOKEN="$TOKEN" sh - >/dev/null 2>&1
-
-		echo "✅ Worker K3s configuré avec succès"
+			echo "✅ K3s agent configuré"
 		SHELL
 	end
 end
